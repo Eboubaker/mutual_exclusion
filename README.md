@@ -1,1 +1,1 @@
-TP Distributed Systems: Lann [Token ring](https://www2.rivier.edu/faculty/vriabov/Lab02_TokenRing.pdf) algorithm
+TP Distributed Systems: Lann [Token ring](https://www.cs.colostate.edu/~cs551/CourseNotes/Synchronization/RingElectExample.html) algorithm
