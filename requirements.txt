@@ -1,1 +1,2 @@
 mysql-connector-python
+git+https://github.com/magmax/python-readchar@v4.1.0-dev1
