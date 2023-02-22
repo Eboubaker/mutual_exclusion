@@ -18,9 +18,7 @@ class Resource:
     def hash(self) -> str: # token
         pass
 
-text_to_commit = ''
-use_resource_next_cycle = False
-running = True
+
 cli = IO()
 class MySQLResource(Resource):
     def __init__(self, host, database, user, password) -> None:
@@ -36,7 +34,10 @@ class MySQLResource(Resource):
         try:
             cli.write(f"[critical] using mysql database...")
             cursor = self.connection.cursor()
+            cursor.execute("SELECT counter from counter")
+            result = cursor.fetchone()[0]
             cursor.execute("INSERT INTO usage_history (machine_port, data) VALUES (%s, %s)", (str(port_col_value), text))
+            cursor.execute("UPDATE counter set counter=%s", (int(result + 1),))
             self.connection.commit()
         except KeyboardInterrupt as e:
             raise e
@@ -51,6 +52,9 @@ class MySQLResource(Resource):
     def hash(self):
         return hashlib.sha1((self.host+':'+self.database).encode()).hexdigest()
 
+text_to_commit = ''
+use_resource_next_cycle = False
+running = True
 def read_stdin():
     global use_resource_next_cycle, text_to_commit, running
     try:
@@ -108,10 +112,12 @@ def ring_loop(server_socket: sockets.socket, succ_port: int, resource: Resource)
 resource: Resource = MySQLResource(host='127.0.0.1', database='tp', user='root', password='toor')
 try:
     our_port = int(input("our_port="))
+    # our_port = 6777 if '1' == os.environ.get('RING_START', '') else 6888
     server_socket = sockets.socket(sockets.AF_INET, sockets.SOCK_STREAM)
     server_socket.bind(('127.0.0.1', our_port))
     server_socket.listen()
     succ_port = int(input("successor_port="))
+    # succ_port = 6888 if '1' == os.environ.get('RING_START', '') else 6777
     running = True
     ring_loop(server_socket, succ_port, resource)
 finally:

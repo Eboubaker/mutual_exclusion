@@ -1,6 +1,6 @@
 TP Distributed Systems: Lann [Token ring](https://www.cs.colostate.edu/~cs551/CourseNotes/Synchronization/RingElectExample.html) algorithm
 
-modify database credentials in main.py and create required mysql table 
+modify database credentials in main.py and create required mysql table `counter(counter int)` and `usage_history(machine_port varchar, data text, time timestamp)`
 ```
 pip install -r requirements.txt
 python main.py
