@@ -1,4 +1,5 @@
 import _thread
+import datetime
 import os
 import socket as sockets
 import time
@@ -20,7 +21,7 @@ MESSAGE_TYPE_PERMISSION_GRANTED = 2
 
 text_to_commit = ''
 use_resource = False
-
+our_request_time = '999999999999999999'
 other_processes_ports = []
 
 argv = sys.argv
@@ -42,17 +43,17 @@ else:
 h = 0
 last_request_h = 0
 def request_resource():
-    global h, last_request_h, use_resource
-    h = h + 1
-    last_request_h = h
+    global our_request_time, use_resource
+    our_request_time = time = datetime.datetime.utcnow().strftime('%H:%M:%S.%f')
+
     for p in other_processes_ports:
         if not running:
             break
-        cli.write(f"will send MESSAGE(type=PERMISSION_REQUEST, port={our_port}, h={last_request_h}) to node {p}")
+        cli.write(f"will send MESSAGE(type=PERMISSION_REQUEST, port={our_port}, time={time}) to node {p}")
         with BufferedSocketStream(p) as node:
             node.send_int32(our_port)
             node.send_int32(MESSAGE_TYPE_PERMISSION_REQUEST)
-            node.send_int32(last_request_h)
+            node.send_utf8(time)
 
 
 def read_stdin():
@@ -60,7 +61,7 @@ def read_stdin():
     try:
         while running:
             if not use_resource:
-                text_to_commit = cli.input("write to db: ", 'magenta')
+                text_to_commit = cli.input(f"[node {our_port}] write to db: ", 'magenta')
                 use_resource = True
                 request_resource()
             else:
@@ -72,15 +73,14 @@ def read_stdin():
 
 
 def handle_node_message(port: int, stream: BufferedSocketStream):
-    global h, use_resource
+    global our_request_time, use_resource
     cli.write(f'[thread handler for {port}] node {port} connected')
     message_type = stream.read_int32()
 
     if message_type == MESSAGE_TYPE_PERMISSION_REQUEST:
-        incoming_h = stream.read_int32()
-        cli.write(f"[thread handler for {port}] got MESSAGE(type=PERMISSION_REQUEST, port={port}, h={incoming_h}) from node {port}")
-        h = max(h, incoming_h)
-        if use_resource and last_request_h < incoming_h:
+        incoming_time = stream.read_utf8()
+        cli.write(f"[thread handler for {port}] got MESSAGE(type=PERMISSION_REQUEST, port={port}, time={incoming_time}) from node {port}")
+        if use_resource and our_request_time < incoming_time:
             cli.write(f"[thread handler for {port}] adding {port} to wainting list")
             waiting_nodes.append(port)
         else:
@@ -96,6 +96,7 @@ def handle_node_message(port: int, stream: BufferedSocketStream):
             resource.use(data=(port, text_to_commit), log=cli)
             time.sleep(3)
             use_resource = False
+            cli.write(f'[thread handler for {port}] resoure released')
             cli.write(f'[thread handler for {port}] will send PERMISSION_GRANTED to waiting nodes ({len(waiting_nodes)})')
             for p in waiting_nodes:
                 cli.write(f"[thread handler for {port}] will send MESSAGE(type=PERMISSION_GRANTED, port={our_port}) to node {p}")
@@ -124,8 +125,10 @@ server_socket.settimeout(2)
 try:
     cli.write(f"[server] listening on {server_socket.getsockname()}")
     while running:
-        try: stream = BufferedSocketStream(server_socket.accept()[0])
-        except sockets.timeout: continue
+        try:
+            stream = BufferedSocketStream(server_socket.accept()[0])
+        except sockets.timeout:
+            continue
         port = stream.read_int32()
         cli.write(f"[server] new connection from {port}")
         _thread.start_new_thread(handle_node_message, (port, stream))
