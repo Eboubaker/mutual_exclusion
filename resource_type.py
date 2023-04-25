@@ -22,12 +22,12 @@ class MySQLResource(Resource):
         self.database = database
         self.connection = mysql.connector.connect(host=host, database=database, user=user, password=password)
         if self.connection.is_connected():
-            log.write("Connected to MySQL, Server version: ", self.connection.get_server_info())
+            log.write("[MySQLResource] Connected to MySQL, Server version: ", self.connection.get_server_info())
 
     def use(self, data, log: IO):
         port_col_value, text = data
         try:
-            log.write(f"[critical] using mysql database...")
+            log.write(f"[MySQLResource] using mysql database...")
             cursor = self.connection.cursor()
             cursor.execute("SELECT counter from counter")
             result = cursor.fetchone()[0]
@@ -41,7 +41,7 @@ class MySQLResource(Resource):
 
     def finalize(self, log: IO):
         if self.connection.is_connected:
-            log.write("closing mysql connection")
+            log.write("[MySQLResource] closing mysql connection")
             self.connection.close()
 
     def hash(self):
@@ -55,7 +55,7 @@ class FileResource(Resource):
 
     def use(self, data, log: IO):
         port, text = data
-        log.write(f"writing to file {self.path}, content: {port}: {text}")
+        log.write(f"[FileResource] writing to file {self.path}, content: {port}: {text}")
         try:
             with open(self.path, 'a') as f:
                 f.write(f'{port}: {text}\n')
