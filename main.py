@@ -86,10 +86,10 @@ def handle_node_message(port: int, stream: BufferedSocketStream):
             use_resource = False
             cli.write(f'[thread handler for {port}] will send PERMISSION_GRANTED to waiting nodes ({len(waiting_nodes)})')
             for p in waiting_nodes:
-                cli.write(f"[thread handler for {port}] will send MESSAGE(type=PERMISSION_GRANTED, port={our_port}) to node {port}")
+                cli.write(f"[thread handler for {port}] will send MESSAGE(type=PERMISSION_GRANTED, port={our_port}) to node {p}")
                 if not running:
                     break
-                with BufferedSocketStream(port) as node:
+                with BufferedSocketStream(p) as node:
                     node.send_int32(our_port)
                     node.send_int32(MESSAGE_TYPE_PERMISSION_GRANTED)
             waiting_nodes.clear()
