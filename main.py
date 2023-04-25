@@ -1,67 +1,57 @@
+import _thread
+import os
 import socket as sockets
 import time
-import traceback
-import hashlib
-import _thread
-import mysql.connector
-import os
+from typing import List, Tuple
+import sys
+from BufferedSocketStream import BufferedSocketStream
 from cli_io import IO
-
-# interface
-class Resource:
-    def use(self, data) -> None: # run critical code
-        pass
-
-    def finalize(self) -> None: # close any open buffers/connections
-        pass
-
-    def hash(self) -> str: # token
-        pass
-
+from resource_type import *
 
 cli = IO()
-class MySQLResource(Resource):
-    def __init__(self, host, database, user, password) -> None:
-        super().__init__()
-        self.host = host
-        self.database = database
-        self.connection = mysql.connector.connect(host=host, database=database, user=user, password=password)
-        if self.connection.is_connected():
-            cli.write("Connected to MySQL, Server version: ", self.connection.get_server_info())
 
-    def use(self, data):
-        port_col_value, text = data
-        try:
-            cli.write(f"[critical] using mysql database...")
-            cursor = self.connection.cursor()
-            cursor.execute("SELECT counter from counter")
-            result = cursor.fetchone()[0]
-            cursor.execute("INSERT INTO usage_history (machine_port, data) VALUES (%s, %s)", (str(port_col_value), text))
-            cursor.execute("UPDATE counter set counter=%s", (int(result + 1),))
-            self.connection.commit()
-        except KeyboardInterrupt as e:
-            raise e
-        except:
-            cli.write(traceback.format_exc())
+running = True
 
-    def finalize(self):
-        if self.connection.is_connected:
-            cli.write("closing mysql connection")
-            self.connection.close()
+waiting_nodes: List[BufferedSocketStream] = []
+aquired_permissions: List[BufferedSocketStream] = []
 
-    def hash(self):
-        return hashlib.sha1((self.host+':'+self.database).encode()).hexdigest()
+MESSAGE_TYPE_PERMISSION_REQUEST = 1
+MESSAGE_TYPE_PERMISSION_GRANTED = 2
+
+h = 0
+last_request_h = 0
+#resource: Resource = MySQLResource(host='127.0.0.1', database='tp', user='root', password='toor', log=cli)
+resource: Resource = FileResource(path='db.txt', log=cli)
 
 text_to_commit = ''
-use_resource_next_cycle = False
-running = True
+use_resource = False
+
+other_processes_ports = []
+
+
+def request_resource():
+    global h, last_request_h, use_resource
+    h = h + 1
+    last_request_h = h
+    cli.write(f"will send PERMISSION_REQUEST to nodes {','.join([str(i) for i in other_processes_ports])} +request_h={last_request_h}")
+    for p in other_processes_ports:
+        if not running:
+            break
+        node = BufferedSocketStream(sockets.create_connection(('localhost', p)))
+        node.send_int32(our_port)
+        node.send_int32(MESSAGE_TYPE_PERMISSION_REQUEST)
+        node.send_int32(last_request_h)
+        node.close()
+
+
 def read_stdin():
-    global use_resource_next_cycle, text_to_commit, running
+    global use_resource, text_to_commit, running
     try:
         while running:
-            if not use_resource_next_cycle:
+            if not use_resource:
                 text_to_commit = cli.input("write to db: ", 'magenta')
-                use_resource_next_cycle = True
+                use_resource = True
+                request_resource()
             else:
                 time.sleep(.5)
     except KeyboardInterrupt:
@@ -69,58 +59,76 @@ def read_stdin():
     finally:
         running = False
 
-def ring_loop(server_socket: sockets.socket, succ_port: int, resource: Resource):
-    global use_resource_next_cycle, text_to_commit, running
-    succ_soc = sockets.socket(sockets.AF_INET, sockets.SOCK_STREAM)
-    while running:
-        try:succ_soc.connect(('127.0.0.1', succ_port));break
-        except:pass
-    if '1' == os.environ.get('RING_START', ''):  # initial wheel push
-        cli.write("sending token to successor")
-        succ_soc.send(resource.hash().encode())
-    cli.write('waiting predecessor connection')
-    pred_soc, _ = server_socket.accept() # accept predecessor connection
-    our_port = server_socket.getsockname()[1]
-    last_iteration_time = time.perf_counter()
-    cycle_counter = 0
-    _thread.start_new_thread(read_stdin, ())  # start reading user input
-    try:
-        while running:
-            cli.write(f"[cycle {cycle_counter:2d}] waiting token from predecessor")
-            token = pred_soc.recv(1024).decode()
-            if token == '':
-                cli.write('predecessor link terminated')
-                break
-            cli.write(f"[cycle {cycle_counter:2d}] received from predecessor token {token}")
-            if token == resource.hash() and use_resource_next_cycle:
-                cli.write(f"[cycle {cycle_counter:2d}] entering critical section")
-                resource.use([our_port, text_to_commit])
-                use_resource_next_cycle = False
-            cli.write(f"[cycle {cycle_counter:2d}] sending to successor {succ_port} token {token}")
-            succ_soc.send(token.encode())
 
-            # reduce traffic, 2 seconds per iteration maximum
-            delta_t = time.perf_counter() - last_iteration_time
-            if delta_t < 2:
-                time.sleep(2 - delta_t)
-            last_iteration_time = time.perf_counter()
-            cycle_counter += 1
-    except KeyboardInterrupt:  # Ctrl+c
-        pass
+def handle_node_message(port: int, stream: BufferedSocketStream):
+    global h, use_resource
+    cli.write(f'[thread handler for {port}] node {port} connected')
+    message_type = stream.read_int32()
+
+    if message_type == MESSAGE_TYPE_PERMISSION_REQUEST:
+        cli.write(f"[thread handler for {port}] read PERMISSION_REQUEST")
+        incoming_h = stream.read_int32()
+        h = max(h, incoming_h)
+        if use_resource and last_request_h < incoming_h:
+            cli.write(f"[thread handler for {port}] adding {port} to wainting list")
+            waiting_nodes.append(port)
+        else:
+            cli.write(f"[thread handler for {port}] will send PERMISSION_GRANTED")
+            node = BufferedSocketStream(port)
+            node.send_int32(our_port)
+            node.send_int32(MESSAGE_TYPE_PERMISSION_GRANTED)
+            node.close()
+    elif message_type == MESSAGE_TYPE_PERMISSION_GRANTED:
+        cli.write(f"[thread handler for {port}] read PERMISSION_GRANTED")
+        aquired_permissions.append(port)
+        if len(aquired_permissions) == len(other_processes_ports):
+            cli.write('using resource')
+            resource.use(data=(port, text_to_commit), log=cli)
+            time.sleep(3)
+            use_resource = False
+            cli.write(f'[thread handler for {port}] will send PERMISSION_GRANTED to waiting nodes ({len(waiting_nodes)})')
+            for p in waiting_nodes:
+                if not running:
+                    break
+                node = BufferedSocketStream(p)
+                node.send_int32(our_port)
+                node.send_int32(MESSAGE_TYPE_PERMISSION_GRANTED)
+                node.close()
+            waiting_nodes.clear()
+            aquired_permissions.clear()
+    else:
+        print(f"[thread handler for {port}] read unkown message type: {message_type}")
+    stream.close()
 
 
-resource: Resource = MySQLResource(host='127.0.0.1', database='tp', user='root', password='toor')
+argv = sys.argv
+def get_arg(argname: str):
+    for arg in argv:
+        if argname in arg:
+            return arg.split('=')[1]
+    return input(f"{argname}=")
+
+our_port = int(get_arg("our_port"))
+other_processes_ports = [int(p) for p in get_arg("processes_ports").split(',')]
+
+# our_port = 8888
+# other_processes_ports = [8777,8886]
+
+server_socket = sockets.create_server(address=('127.0.0.1', our_port), family=sockets.AF_INET, backlog=10)
+_thread.start_new_thread(read_stdin, ())
+server_socket.settimeout(2)
+
 try:
-    our_port = int(input("our_port="))
-    # our_port = 6777 if '1' == os.environ.get('RING_START', '') else 6888
-    server_socket = sockets.socket(sockets.AF_INET, sockets.SOCK_STREAM)
-    server_socket.bind(('127.0.0.1', our_port))
-    server_socket.listen()
-    succ_port = int(input("successor_port="))
-    # succ_port = 6888 if '1' == os.environ.get('RING_START', '') else 6777
-    running = True
-    ring_loop(server_socket, succ_port, resource)
+    cli.write(f"listening on {server_socket.getsockname()}")
+    while running:
+        try: stream = BufferedSocketStream(server_socket.accept()[0], reconnect_attempts=0)
+        except sockets.timeout: continue
+        port = stream.read_int32()
+        cli.write(f"new connection from {port}")
+        _thread.start_new_thread(handle_node_message, (port, stream))
+except KeyboardInterrupt:  # Ctrl+c
+    pass
 finally:
     server_socket.close()
-    resource.finalize()
+    resource.finalize(log=cli)
     running = False
