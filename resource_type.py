@@ -12,9 +12,6 @@ class Resource:
     def finalize(self, log: IO) -> None:  # close any open buffers/connections
         pass
 
-    def hash(self) -> str:  # token
-        pass
-
 class MySQLResource(Resource):
     def __init__(self, log: IO, host, database, user, password) -> None:
         super().__init__()
@@ -44,10 +41,6 @@ class MySQLResource(Resource):
             log.write("[MySQLResource] closing mysql connection")
             self.connection.close()
 
-    def hash(self):
-        return hashlib.sha1((self.host+':'+self.database).encode()).hexdigest()
-
-
 class FileResource(Resource):
     def __init__(self, log: IO, path: str) -> None:
         super().__init__()
@@ -66,6 +59,3 @@ class FileResource(Resource):
 
     def finalize(self, log: IO):
         pass
-
-    def hash(self):
-        return hashlib.sha1((self.path).encode()).hexdigest()
