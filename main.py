@@ -18,7 +18,6 @@ MESSAGE_TYPE_PERMISSION_GRANTED = 2
 
 text_to_commit = ''
 use_resource = False
-our_request_time = '999999999999999999'
 other_processes_ports = []
 
 
@@ -35,17 +34,19 @@ last_request_h = 0
 
 
 def request_resource():
-    global our_request_time, use_resource
-    our_request_time = time = datetime.datetime.utcnow().strftime('%H:%M:%S.%f')
+    global last_request_h, h, use_resource
+
+    h = h + 1
+    last_request_h = h
 
     for p in other_processes_ports:
         if not running:
             break
-        cli.debug(f"will send MESSAGE(type=PERMISSION_REQUEST, port={our_port}, time={time}) to node {p}")
+        cli.debug(f"will send MESSAGE(type=PERMISSION_REQUEST, port={our_port}, h={h}) to node {p}")
         with BufferedSocketStream(p) as node:
             node.send_int32(our_port)
             node.send_int32(MESSAGE_TYPE_PERMISSION_REQUEST)
-            node.send_utf8(time)
+            node.send_int32(h)
     cli.write('Waiting for permission-replies')
 
 
@@ -66,14 +67,15 @@ def read_stdin():
 
 
 def handle_node_message(port: int, stream: BufferedSocketStream):
-    global our_request_time, use_resource
+    global h, use_resource
     cli.debug(f'[thread handler for {port}] node {port} connected')
     message_type = stream.read_int32()
 
     if message_type == MESSAGE_TYPE_PERMISSION_REQUEST:
-        incoming_time = stream.read_utf8()
-        cli.debug(f"[thread handler for {port}] got MESSAGE(type=PERMISSION_REQUEST, port={port}, time={incoming_time}) from node {port}")
-        if use_resource and our_request_time < incoming_time:
+        incoming_h = stream.read_int32()
+        h = max(h, incoming_h)
+        cli.debug(f"[thread handler for {port}] got MESSAGE(type=PERMISSION_REQUEST, port={port}, incoming_h={incoming_h}) from node {port}")
+        if use_resource and last_request_h < incoming_h:
             cli.debug(f"[thread handler for {port}] adding {port} to wainting list")
             waiting_nodes.append(port)
         else:
