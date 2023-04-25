@@ -32,7 +32,7 @@ def get_arg(argname: str, cli_fallback=True, default=None):
         if argname in arg:
             v = arg.split('=')
             return v[1] if len(v) > 1 else v
-    return input(f"{argname}=") if cli_fallback or default else default
+    return input(f"{argname}=") if cli_fallback else default
 
 
 if get_arg("use_db", cli_fallback=False):
