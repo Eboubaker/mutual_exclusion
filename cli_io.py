@@ -332,3 +332,23 @@ class IO:
 class SilentIO(IO):
     def write(self, txt: object, new_line=True, color=None):
         pass
+
+
+argv = sys.argv
+
+
+def get_arg(argname: str, cli_fallback=True, default=None):
+    for arg in argv:
+        if argname in arg:
+            v = arg.split('=')
+            return v[1] if len(v) > 1 else v
+    return input(f"{argname}=") if cli_fallback else default
+
+
+def get_argflag(flagname: str, cli_fallback=False):
+    for arg in argv:
+        if flagname in arg:
+            return True
+    if cli_fallback:
+        return input(f"{flagname}?(skip for no)=") != ""
+    return False

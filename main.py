@@ -1,12 +1,10 @@
 import _thread
 import datetime
-import os
 import socket as sockets
 import time
-from typing import List, Tuple
-import sys
+from typing import List
 from BufferedSocketStream import BufferedSocketStream
-from cli_io import IO, SilentIO
+from cli_io import IO, get_arg, get_argflag
 from resource_type import *
 
 cli = IO()
@@ -22,25 +20,6 @@ text_to_commit = ''
 use_resource = False
 our_request_time = '999999999999999999'
 other_processes_ports = []
-
-argv = sys.argv
-
-
-def get_arg(argname: str, cli_fallback=True, default=None):
-    for arg in argv:
-        if argname in arg:
-            v = arg.split('=')
-            return v[1] if len(v) > 1 else v
-    return input(f"{argname}=") if cli_fallback else default
-
-
-def get_argflag(flagname: str, cli_fallback=False):
-    for arg in argv:
-        if flagname in arg:
-            return True
-    if cli_fallback:
-        return input(f"{flagname}?(skip for no)=") != ""
-    return False
 
 
 less_verbose_flag = get_argflag('less_verbose')

@@ -1,5 +1,5 @@
 import socket as sockets
-from typing import Tuple, Union
+from typing import Union
 
 
 class BufferedSocketStream:

@@ -1,6 +1,4 @@
-import socket as sockets
 import traceback
-import hashlib
 import mysql.connector
 from cli_io import IO
 
