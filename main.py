@@ -35,10 +35,10 @@ def get_arg(argname: str, cli_fallback=True, default=None):
     return input(f"{argname}=") if cli_fallback or default else default
 
 
-if get_arg("use_files", cli_fallback=False):
-    resource: Resource = FileResource(path='db.txt', log=cli)
-else:
+if get_arg("use_db", cli_fallback=False):
     resource: Resource = MySQLResource(host='127.0.0.1', database='tp', user='root', password='toor', log=cli)
+else:
+    resource: Resource = FileResource(path='db.txt', log=cli)
 
 h = 0
 last_request_h = 0
