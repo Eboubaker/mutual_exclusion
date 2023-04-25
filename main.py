@@ -33,15 +33,14 @@ def request_resource():
     global h, last_request_h, use_resource
     h = h + 1
     last_request_h = h
-    cli.write(f"will send PERMISSION_REQUEST to nodes {','.join([str(i) for i in other_processes_ports])} +request_h={last_request_h}")
     for p in other_processes_ports:
         if not running:
             break
-        node = BufferedSocketStream(sockets.create_connection(('localhost', p)))
-        node.send_int32(our_port)
-        node.send_int32(MESSAGE_TYPE_PERMISSION_REQUEST)
-        node.send_int32(last_request_h)
-        node.close()
+        cli.write(f"will send MESSAGE(type=PERMISSION_REQUEST, port={our_port}, h={last_request_h}) to node {p}")
+        with BufferedSocketStream(p) as node:
+            node.send_int32(our_port)
+            node.send_int32(MESSAGE_TYPE_PERMISSION_REQUEST)
+            node.send_int32(last_request_h)
 
 
 def read_stdin():
@@ -66,20 +65,19 @@ def handle_node_message(port: int, stream: BufferedSocketStream):
     message_type = stream.read_int32()
 
     if message_type == MESSAGE_TYPE_PERMISSION_REQUEST:
-        cli.write(f"[thread handler for {port}] read PERMISSION_REQUEST")
         incoming_h = stream.read_int32()
+        cli.write(f"[thread handler for {port}] got MESSAGE(type=PERMISSION_REQUEST, port={port}, h={incoming_h}) from node {port}")
         h = max(h, incoming_h)
         if use_resource and last_request_h < incoming_h:
             cli.write(f"[thread handler for {port}] adding {port} to wainting list")
             waiting_nodes.append(port)
         else:
-            cli.write(f"[thread handler for {port}] will send PERMISSION_GRANTED")
-            node = BufferedSocketStream(port)
-            node.send_int32(our_port)
-            node.send_int32(MESSAGE_TYPE_PERMISSION_GRANTED)
-            node.close()
+            cli.write(f"[thread handler for {port}] will send MESSAGE(type=PERMISSION_GRANTED, port={our_port}) to node {port}")
+            with BufferedSocketStream(port) as node:
+                node.send_int32(our_port)
+                node.send_int32(MESSAGE_TYPE_PERMISSION_GRANTED)
     elif message_type == MESSAGE_TYPE_PERMISSION_GRANTED:
-        cli.write(f"[thread handler for {port}] read PERMISSION_GRANTED")
+        cli.write(f"[thread handler for {port}] got MESSAGE(type=PERMISSION_GRANTED, port={port}) from node {port}")
         aquired_permissions.append(port)
         if len(aquired_permissions) == len(other_processes_ports):
             cli.write('using resource')
@@ -88,16 +86,16 @@ def handle_node_message(port: int, stream: BufferedSocketStream):
             use_resource = False
             cli.write(f'[thread handler for {port}] will send PERMISSION_GRANTED to waiting nodes ({len(waiting_nodes)})')
             for p in waiting_nodes:
+                cli.write(f"[thread handler for {port}] will send MESSAGE(type=PERMISSION_GRANTED, port={our_port}) to node {port}")
                 if not running:
                     break
-                node = BufferedSocketStream(p)
-                node.send_int32(our_port)
-                node.send_int32(MESSAGE_TYPE_PERMISSION_GRANTED)
-                node.close()
+                with BufferedSocketStream(port) as node:
+                    node.send_int32(our_port)
+                    node.send_int32(MESSAGE_TYPE_PERMISSION_GRANTED)
             waiting_nodes.clear()
             aquired_permissions.clear()
     else:
-        print(f"[thread handler for {port}] read unkown message type: {message_type}")
+        cli.write(f"[thread handler for {port}] got unkown message type: {message_type}")
     stream.close()
 
 
@@ -119,12 +117,12 @@ _thread.start_new_thread(read_stdin, ())
 server_socket.settimeout(2)
 
 try:
-    cli.write(f"listening on {server_socket.getsockname()}")
+    cli.write(f"[server] listening on {server_socket.getsockname()}")
     while running:
-        try: stream = BufferedSocketStream(server_socket.accept()[0], reconnect_attempts=0)
+        try: stream = BufferedSocketStream(server_socket.accept()[0])
         except sockets.timeout: continue
         port = stream.read_int32()
-        cli.write(f"new connection from {port}")
+        cli.write(f"[server] new connection from {port}")
         _thread.start_new_thread(handle_node_message, (port, stream))
 except KeyboardInterrupt:  # Ctrl+c
     pass

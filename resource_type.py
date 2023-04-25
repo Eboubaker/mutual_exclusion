@@ -57,7 +57,7 @@ class FileResource(Resource):
         port, text = data
         log.write(f"writing to file {self.path}, content: {port}: {text}")
         try:
-            with open(self.path, 'w+a') as f:
+            with open(self.path, 'a') as f:
                 f.write(f'{port}: {text}\n')
         except KeyboardInterrupt as e:
             raise e

@@ -256,8 +256,10 @@ class IO:
             self.read_error = traceback.format_exc()
             return
 
-    def write(self, txt: object, new_line=True):
+    def write(self, txt: object, new_line=True, color=None):
         txt = str(txt)
+        if color:
+            txt = colored(txt, color)
         with self.write_lock:
             if self.read_lock.locked():
                 self.__clear_input()

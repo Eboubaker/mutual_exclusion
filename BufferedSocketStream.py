@@ -7,7 +7,7 @@ class BufferedSocketStream:
     reconnect_attempts set to 0 to disable autoreconnect
     """
 
-    def __init__(self, address: Union[tuple[str, int], int, sockets.socket], reconnect_attempts=3):
+    def __init__(self, address: Union[tuple[str, int], int, sockets.socket], reconnect_attempts=0):
         if (isinstance(address, int)):
             address = ('127.0.0.1', address)
         if isinstance(address, tuple):
@@ -74,10 +74,12 @@ class BufferedSocketStream:
     def send_int32(self, n: int):
         self.sendall(n.to_bytes(length=8, byteorder='little'))
 
-    def read_utf8(self, size: int):
+    # read length then read bytes
+    def read_utf8(self):
         len = self.read_int32()
         return self.read(len).decode('utf-8')
 
+    # send length then send bytes
     def send_utf8(self, s: str):
         buf = s.encode('utf-8')
         self.send_int32(len(buf))
@@ -85,3 +87,15 @@ class BufferedSocketStream:
 
     def close(self):
         self.socket.close()
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_value, tb):
+        try:
+            self.socket.close()
+        except Exception as e:
+            print("error closing socket", e)
+        if exc_type is not None:
+            return False  # exception happened
+        return True
