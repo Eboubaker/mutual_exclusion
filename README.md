@@ -5,7 +5,7 @@ TP Distributed Systems: [Ricart & Agrawala Mutual Exclusion Algorithm](https://e
 pip install -r requirements.txt
 python main.py
 ```
-run 3 or more instances of main.py, with required argument `our_port` and `processes_ports` (comma seperated) to use a database as a resource instead of a file add `use_db` argument.
+run 3 or more instances of main.py, with required argument `our_port` and `processes_ports` (comma seperated) to use a database as a resource instead of a file add `use_db` argument. `less_verbose` option can be added to reduce debug log
 
 each node must know the other processes (using `processes_ports` arguemnt)
 

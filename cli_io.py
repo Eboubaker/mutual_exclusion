@@ -106,6 +106,8 @@ class ReadError(IOError):
     pass
 
 
+
+
 class IO:
     def __init__(self):
         self.read_buffer = ''
@@ -123,6 +125,7 @@ class IO:
         self.read_error: Optional[ReadError] = None
         self.read_interrupted = False
         self.cursor_at = 0
+        self.debug_ignored = False
 
     def update_input_label(self, label):
         self.label = label
@@ -255,7 +258,15 @@ class IO:
         except BaseException:
             self.read_error = traceback.format_exc()
             return
+        
+    def ignore_debug(self, ignore):
+        self.debug_ignored = ignore
 
+    def debug(self, txt: object, new_line=True, color=None):
+        if self.debug_ignored:
+            return
+        self.write(txt, new_line, color)
+    
     def write(self, txt: object, new_line=True, color=None):
         txt = str(txt)
         if color:
@@ -316,3 +327,8 @@ class IO:
                 self.read_error = None
                 raise ReadError(err)
             return v
+
+
+class SilentIO(IO):
+    def write(self, txt: object, new_line=True, color=None):
+        pass
