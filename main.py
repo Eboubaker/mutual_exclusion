@@ -18,17 +18,29 @@ aquired_permissions: List[BufferedSocketStream] = []
 MESSAGE_TYPE_PERMISSION_REQUEST = 1
 MESSAGE_TYPE_PERMISSION_GRANTED = 2
 
-h = 0
-last_request_h = 0
-#resource: Resource = MySQLResource(host='127.0.0.1', database='tp', user='root', password='toor', log=cli)
-resource: Resource = FileResource(path='db.txt', log=cli)
-
 text_to_commit = ''
 use_resource = False
 
 other_processes_ports = []
 
+argv = sys.argv
 
+
+def get_arg(argname: str, cli_fallback=True, default=None):
+    for arg in argv:
+        if argname in arg:
+            v = arg.split('=')
+            return v[1] if len(v) > 1 else v
+    return input(f"{argname}=") if cli_fallback or default else default
+
+
+if get_arg("use_files", cli_fallback=False):
+    resource: Resource = FileResource(path='db.txt', log=cli)
+else:
+    resource: Resource = MySQLResource(host='127.0.0.1', database='tp', user='root', password='toor', log=cli)
+
+h = 0
+last_request_h = 0
 def request_resource():
     global h, last_request_h, use_resource
     h = h + 1
@@ -98,13 +110,6 @@ def handle_node_message(port: int, stream: BufferedSocketStream):
         cli.write(f"[thread handler for {port}] got unkown message type: {message_type}")
     stream.close()
 
-
-argv = sys.argv
-def get_arg(argname: str):
-    for arg in argv:
-        if argname in arg:
-            return arg.split('=')[1]
-    return input(f"{argname}=")
 
 our_port = int(get_arg("our_port"))
 other_processes_ports = [int(p) for p in get_arg("processes_ports").split(',')]
