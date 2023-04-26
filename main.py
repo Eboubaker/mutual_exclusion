@@ -75,7 +75,7 @@ def handle_node_message(port: int, stream: BufferedSocketStream):
         incoming_h = stream.read_int32()
         h = max(h, incoming_h)
         cli.debug(f"[thread handler for {port}] got MESSAGE(type=PERMISSION_REQUEST, port={port}, incoming_h={incoming_h}) from node {port}")
-        if use_resource and last_request_h < incoming_h:
+        if (use_resource and last_request_h < incoming_h) or (use_resource and last_request_h == incoming_h and our_port < port):
             cli.debug(f"[thread handler for {port}] adding {port} to wainting list")
             waiting_nodes.append(port)
         else:
